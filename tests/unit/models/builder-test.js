@@ -5,10 +5,13 @@ const path = require('path');
 const BuildCommand = require('../../../lib/commands/build');
 const commandOptions = require('../../factories/command-options');
 const RSVP = require('rsvp');
+const rimraf = require('rimraf');
+const dircompare = require('dir-compare');
 const MockProject = require('../../helpers/mock-project');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
 const td = require('testdouble');
 const chai = require('../../chai');
+const experiments = require('../../../lib/experiments');
 let expect = chai.expect;
 let file = chai.file;
 
@@ -123,8 +126,10 @@ describe('models/builder.js', function() {
   describe('build', function() {
     let instrumentationStart;
     let instrumentationStop;
+    let cwd;
 
     beforeEach(function() {
+      cwd = process.cwd();
       builder = new Builder({
         setupBroccoliBuilder,
         project: new MockProject(),
@@ -136,9 +141,13 @@ describe('models/builder.js', function() {
     });
 
     afterEach(function() {
+      process.chdir(cwd);
       delete process._heimdall;
       delete process.env.BROCCOLI_VIZ;
       builder.project.ui.output = '';
+      if (fs.existsSync(`${builder.project.root}/tmp`)) {
+        rimraf.sync(`${builder.project.root}/tmp`);
+      }
     });
 
     it('calls instrumentation.start', function() {
@@ -173,6 +182,74 @@ describe('models/builder.js', function() {
         let output = builder.project.ui.output;
 
         expect(output).to.not.include('Heimdalljs < 0.1.4 found.  Please remove old versions');
+      });
+    });
+
+    it('writes temp files to project root when EMBER_CLI_BROCCOLI_2=1', function() {
+      const project = new MockProject();
+      project.root += '/tests/fixtures/build/simple';
+
+      builder = new Builder({
+        project,
+        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        broccoli2: true,
+      });
+
+      return builder.build().then(function() {
+        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.true;
+      });
+    });
+
+    it('writes temp files to Broccoli temp dir when EMBER_CLI_SYSTEM_TEMP=1', function() {
+      const project = new MockProject();
+      project.root += '/tests/fixtures/build/simple';
+      builder = new Builder({
+        project,
+        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        broccoli2: true,
+        systemTemp: true,
+      });
+
+      expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+      return builder.build().then(function(result) {
+        expect(fs.existsSync(result.directory)).to.be.true;
+        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+        rimraf.sync(result.directory);
+      });
+    });
+
+    it('produces the same output with broccoli-builder and broccoli', function() {
+      const project = new MockProject();
+      project.root += '/tests/fixtures/build/simple';
+      builder = new Builder({
+        project,
+        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+      });
+
+      // Build first, build second
+      return builder.build().then(broccoliBuilderResult => {
+        builder = new Builder({
+          project,
+          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+          broccoli2: true,
+          systemTemp: true,
+        });
+
+        return builder.build().then(function(broccoli2Result) {
+          // Compare the results
+          return dircompare.compare(
+            broccoliBuilderResult.directory,
+            broccoli2Result.directory,
+            { compareContent: true, noDiffSet: true }
+          ).then(function(res) {
+            expect(res.equal).to.equal(3);
+            expect(res.same).to.be.true;
+
+            // Cleanup
+            rimraf.sync(broccoliBuilderResult.directory);
+            rimraf.sync(broccoli2Result.directory);
+          });
+        });
       });
     });
   });
