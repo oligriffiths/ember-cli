@@ -11,7 +11,6 @@ const MockProject = require('../../helpers/mock-project');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
 const td = require('testdouble');
 const chai = require('../../chai');
-const experiments = require('../../../lib/experiments');
 let expect = chai.expect;
 let file = chai.file;
 
