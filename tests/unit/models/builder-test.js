@@ -11,7 +11,6 @@ const MockProject = require('../../helpers/mock-project');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
 const td = require('testdouble');
 const chai = require('../../chai');
-const broccoli2nodeClass = require('broccoli/lib/wrappers/node');
 let expect = chai.expect;
 let file = chai.file;
 
@@ -27,15 +26,33 @@ describe('models/builder.js', function() {
   let addon, builder, buildResults, tmpdir;
 
   function setupBroccoliBuilder() {
-    this.builder = {
-      build() {
-        return Promise.resolve('build results');
-      },
-
-      cleanup() {
-        return Promise.resolve('cleanup result');
-      },
-    };
+    if (this.broccoli2) {
+      this.builder = {
+        outputPath: 'build results',
+        outputNodeWrapper: {
+          __heimdall__: {},
+        },
+        build() {
+          return Promise.resolve();
+        },
+        cleanup() {
+        },
+      };
+    } else {
+      this.builder = {
+        build() {
+          return Promise.resolve({
+            directory: 'build results',
+            graph: {
+              __heimdall__: {},
+            },
+          });
+        },
+        cleanup() {
+          return Promise.resolve('cleanup result');
+        },
+      };
+    }
   }
 
   before(function() {
@@ -161,7 +178,7 @@ describe('models/builder.js', function() {
       let mockAnnotation = 'MockAnnotation';
 
       return builder.build(null, mockAnnotation).then(function() {
-        td.verify(instrumentationStop('build', 'build results', mockAnnotation), { times: 1 });
+        td.verify(instrumentationStop('build', { directory: 'build results', graph: { __heimdall__: {} } }, mockAnnotation), { times: 1 });
       });
     });
 
@@ -265,7 +282,7 @@ describe('models/builder.js', function() {
 
       return builder.build().then(function(result) {
         expect(Object.keys(result)).to.eql(['directory', 'graph']);
-        expect(result.graph instanceof broccoli2nodeClass).to.be.true;
+        expect(result.graph.__heimdall__).to.not.be.undefined;
         expect(fs.existsSync(result.directory)).to.be.true;
       });
     });
@@ -321,23 +338,24 @@ describe('models/builder.js', function() {
       project.addons = [addon];
 
       builder = new Builder({
-        setupBroccoliBuilder() {},
-        builder: {
-          build() {
+        setupBroccoliBuilder() {
+          setupBroccoliBuilder.call(this);
+          let originalBuild = this.builder.build;
+          this.builder.build = () => {
             hooksCalled.push('build');
-
-            return Promise.resolve(buildResults);
-          },
-
-          cleanup() {
-            return Promise.resolve('cleanup results');
-          },
+            return originalBuild.call(this);
+          };
         },
         processBuildResult(buildResults) { return Promise.resolve(buildResults); },
         project,
       });
 
-      buildResults = 'build results';
+      buildResults = {
+        directory: 'build results',
+        graph: {
+          __heimdall__: {},
+        },
+      };
     });
 
     afterEach(function() {

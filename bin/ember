@@ -38,5 +38,10 @@ resolve('ember-cli', {
   }).then(function(result) {
     var exitCode = typeof result === 'object' ? result.exitCode : result;
     exit(exitCode);
+  }).catch((err) => {
+    // should not normally reach here
+    // this handles the case where console-ui is broken
+    console.error(err);
+    exit(1);
   });
 });
