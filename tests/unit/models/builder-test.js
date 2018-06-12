@@ -11,6 +11,7 @@ const MockProject = require('../../helpers/mock-project');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
 const td = require('testdouble');
 const chai = require('../../chai');
+const broccoli2nodeClass = require('broccoli/lib/wrappers/node');
 let expect = chai.expect;
 let file = chai.file;
 
@@ -249,6 +250,23 @@ describe('models/builder.js', function() {
             rimraf.sync(broccoli2Result.directory);
           });
         });
+      });
+    });
+
+    it('returns {directory, graph} compatibility node with EMBER_CLI_BROCCOLI_2=1', function() {
+      const project = new MockProject();
+      project.root += '/tests/fixtures/build/simple';
+
+      builder = new Builder({
+        project,
+        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        broccoli2: true,
+      });
+
+      return builder.build().then(function(result) {
+        expect(Object.keys(result)).to.eql(['directory', 'graph']);
+        expect(result.graph instanceof broccoli2nodeClass).to.be.true;
+        expect(fs.existsSync(result.directory)).to.be.true;
       });
     });
   });
