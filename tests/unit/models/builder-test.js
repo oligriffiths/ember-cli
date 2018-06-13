@@ -206,10 +206,13 @@ describe('models/builder.js', function() {
       const project = new MockProject();
       project.root += '/tests/fixtures/build/simple';
 
+      expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+
       builder = new Builder({
         project,
         processBuildResult(buildResults) { return Promise.resolve(buildResults); },
         broccoli2: true,
+        systemTemp: false,
       });
 
       return builder.build().then(function() {
@@ -220,6 +223,8 @@ describe('models/builder.js', function() {
     it('writes temp files to Broccoli temp dir when EMBER_CLI_SYSTEM_TEMP=1', function() {
       const project = new MockProject();
       project.root += '/tests/fixtures/build/simple';
+      expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+
       builder = new Builder({
         project,
         processBuildResult(buildResults) { return Promise.resolve(buildResults); },
