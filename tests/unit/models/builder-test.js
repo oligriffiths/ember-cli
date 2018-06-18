@@ -241,35 +241,43 @@ describe('models/builder.js', function() {
     it('produces the correct output', function() {
       const project = new MockProject();
       project.root += '/tests/fixtures/build/simple';
-      builder = new Builder({
-        project,
-        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-      });
+      const setup = () => {
+        return new Builder({
+          project,
+          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        });
+      };
 
-      return builder.build().then(result => {
-        expect(fixturify.readSync(result.directory)).to.deep.equal(fixturify.readSync(`${project.root}/dist`));
-      });
+      if (experiments.SYSTEM_TEMP) {
+        chai.expect(setup).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+      } else {
+        return setup().build().promise.then(result => {
+          expect(fixturify.readSync(result.directory)).to.deep.equal(fixturify.readSync(`${project.root}/dist`));
+        });
+      }
     });
 
-    it('returns {directory, graph} as the result object', function() {
-      const project = new MockProject();
-      project.root += '/tests/fixtures/build/simple';
+    if (!experiments.SYSTEM_TEMP) {
+      it('returns {directory, graph} as the result object', function() {
+        const project = new MockProject();
+        project.root += '/tests/fixtures/build/simple';
 
-      builder = new Builder({
-        project,
-        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-      });
+        builder = new Builder({
+          project,
+          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        });
 
-      return builder.build().then(function(result) {
-        expect(Object.keys(result)).to.eql(['directory', 'graph']);
-        if (experiments.BROCCOLI_2) {
-          expect(result.graph.__heimdall__).to.not.be.undefined;
-        } else {
-          expect(result.graph.constructor.name).to.equal('Node');
-        }
-        expect(fs.existsSync(result.directory)).to.be.true;
+        return builder.build().then(function(result) {
+          expect(Object.keys(result)).to.eql(['directory', 'graph']);
+          if (experiments.BROCCOLI_2) {
+            expect(result.graph.__heimdall__).to.not.be.undefined;
+          } else {
+            expect(result.graph.constructor.name).to.equal('Node');
+          }
+          expect(fs.existsSync(result.directory)).to.be.true;
+        });
       });
-    });
+    }
   });
 
   describe('cleanup', function() {
