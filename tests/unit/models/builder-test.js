@@ -241,12 +241,10 @@ describe('models/builder.js', function() {
     it('produces the correct output', function() {
       const project = new MockProject();
       project.root += '/tests/fixtures/build/simple';
-      const setup = () => {
-        return new Builder({
-          project,
-          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-        });
-      };
+      const setup = () => new Builder({
+        project,
+        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+      });
 
       if (experiments.SYSTEM_TEMP) {
         chai.expect(setup).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
