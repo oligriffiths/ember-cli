@@ -246,7 +246,7 @@ describe('models/builder.js', function() {
         processBuildResult(buildResults) { return Promise.resolve(buildResults); },
       });
 
-      if (experiments.SYSTEM_TEMP) {
+      if (experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
         chai.expect(setup).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
       } else {
         return setup().build().then(result => {
@@ -255,7 +255,7 @@ describe('models/builder.js', function() {
       }
     });
 
-    if (!experiments.SYSTEM_TEMP) {
+    if (!experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
       it('returns {directory, graph} as the result object', function() {
         const project = new MockProject();
         project.root += '/tests/fixtures/build/simple';

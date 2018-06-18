@@ -14,6 +14,7 @@ const MockProcess = require('../../helpers/mock-process');
 const copyFixtureFiles = require('../../helpers/copy-fixture-files');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
 const willInterruptProcess = require('../../../lib/utilities/will-interrupt-process');
+const experiments = require('../../../lib/experiments/index');
 let remove = RSVP.denodeify(fs.remove);
 let root = process.cwd();
 let tmproot = path.join(root, 'tmp');
@@ -58,10 +59,14 @@ describe('build task test', function() {
       environment: 'development',
     };
 
-    return task.run(runOptions).then(() => {
-      expect(walkSync(outputPath)).to.eql(['foo.txt']);
-      expect(file('dist/foo.txt')).to.equal('Some file named foo.txt\n');
-    });
+    if (experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
+      chai.expect(task.run(runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+    } else {
+      return task.run(runOptions).then(() => {
+        expect(walkSync(outputPath)).to.eql(['foo.txt']);
+        expect(file('dist/foo.txt')).to.equal('Some file named foo.txt\n');
+      });
+    }
   });
 
   it('generates valid visualization output', function() {
@@ -79,22 +84,26 @@ describe('build task test', function() {
       environment: 'development',
     };
 
-    return task.run(runOptions)
-      .then(function() {
-        let vizOutputPath = 'instrumentation.build.0.json';
-        expect(file(vizOutputPath)).to.exist;
+    if (experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
+      chai.expect(task.run(runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+    } else {
+      return task.run(runOptions)
+        .then(function() {
+          let vizOutputPath = 'instrumentation.build.0.json';
+          expect(file(vizOutputPath)).to.exist;
 
-        // confirm it is valid json
-        let output = fs.readJsonSync(vizOutputPath);
-        expect(Object.keys(output)).to.eql([
-          'summary', 'nodes',
-        ]);
+          // confirm it is valid json
+          let output = fs.readJsonSync(vizOutputPath);
+          expect(Object.keys(output)).to.eql([
+            'summary', 'nodes',
+          ]);
 
-        expect(output.summary.build.type).to.equal('initial');
-        expect(output.summary.buildSteps).to.equal(1);
+          expect(output.summary.build.type).to.equal('initial');
+          expect(output.summary.buildSteps).to.equal(1);
 
-        expect(Array.isArray(output.nodes)).to.equal(true);
-      });
+          expect(Array.isArray(output.nodes)).to.equal(true);
+        });
+    }
   });
 
   it('it displays environment', function() {
