@@ -249,7 +249,7 @@ describe('models/builder.js', function() {
       if (experiments.SYSTEM_TEMP) {
         chai.expect(setup).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
       } else {
-        return setup().build().promise.then(result => {
+        return setup().build().then(result => {
           expect(fixturify.readSync(result.directory)).to.deep.equal(fixturify.readSync(`${project.root}/dist`));
         });
       }
