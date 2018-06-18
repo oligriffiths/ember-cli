@@ -6,9 +6,10 @@ const BuildCommand = require('../../../lib/commands/build');
 const commandOptions = require('../../factories/command-options');
 const RSVP = require('rsvp');
 const rimraf = require('rimraf');
-const dircompare = require('dir-compare');
+const fixturify = require('fixturify');
 const MockProject = require('../../helpers/mock-project');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
+const experiments = require('../../../lib/experiments/index');
 const td = require('testdouble');
 const chai = require('../../chai');
 let expect = chai.expect;
@@ -202,92 +203,70 @@ describe('models/builder.js', function() {
       });
     });
 
-    it('writes temp files to project root when EMBER_CLI_BROCCOLI_2=1', function() {
-      const project = new MockProject();
-      project.root += '/tests/fixtures/build/simple';
+    if (!experiments.SYSTEM_TEMP) {
+      it('writes temp files to project root by default', function() {
+        const project = new MockProject();
+        project.root += '/tests/fixtures/build/simple';
 
-      expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
-
-      builder = new Builder({
-        project,
-        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-        broccoli2: true,
-        systemTemp: false,
-      });
-
-      return builder.build().then(function() {
-        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.true;
-      });
-    });
-
-    it('writes temp files to Broccoli temp dir when EMBER_CLI_SYSTEM_TEMP=1', function() {
-      const project = new MockProject();
-      project.root += '/tests/fixtures/build/simple';
-      expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
-
-      builder = new Builder({
-        project,
-        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-        broccoli2: true,
-        systemTemp: true,
-      });
-
-      expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
-      return builder.build().then(function(result) {
-        expect(fs.existsSync(result.directory)).to.be.true;
-        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
-        rimraf.sync(result.directory);
-      });
-    });
-
-    it('produces the same output with broccoli-builder and broccoli', function() {
-      const project = new MockProject();
-      project.root += '/tests/fixtures/build/simple';
-      builder = new Builder({
-        project,
-        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-      });
-
-      // Build first, build second
-      return builder.build().then(broccoliBuilderResult => {
         builder = new Builder({
           project,
           processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-          broccoli2: true,
-          systemTemp: true,
         });
 
-        return builder.build().then(function(broccoli2Result) {
-          // Compare the results
-          return dircompare.compare(
-            broccoliBuilderResult.directory,
-            broccoli2Result.directory,
-            { compareContent: true, noDiffSet: true }
-          ).then(function(res) {
-            expect(res.equal).to.equal(3);
-            expect(res.same).to.be.true;
-
-            // Cleanup
-            rimraf.sync(broccoliBuilderResult.directory);
-            rimraf.sync(broccoli2Result.directory);
-          });
+        return builder.build().then(function() {
+          expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.true;
         });
+      });
+    }
+
+    if (experiments.SYSTEM_TEMP && experiments.BROCCOLI_2) {
+      it('writes temp files to Broccoli temp dir when EMBER_CLI_SYSTEM_TEMP=1', function() {
+        const project = new MockProject();
+        project.root += '/tests/fixtures/build/simple';
+        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+        builder = new Builder({
+          project,
+          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        });
+
+        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+        return builder.build().then(function(result) {
+          expect(fs.existsSync(result.directory)).to.be.true;
+          expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+          rimraf.sync(result.directory);
+        });
+      });
+    }
+
+    it('produces the correct output', function() {
+      const project = new MockProject();
+      project.root += '/tests/fixtures/build/simple';
+      builder = new Builder({
+        project,
+        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+      });
+
+      return builder.build().then(result => {
+        expect(fixturify.readSync(result.directory)).to.deep.equal(fixturify.readSync(`${project.root}/dist`));
       });
     });
 
-    it('returns {directory, graph} compatibility node with EMBER_CLI_BROCCOLI_2=1', function() {
+    it('returns {directory, graph} as the result object', function() {
       const project = new MockProject();
       project.root += '/tests/fixtures/build/simple';
 
       builder = new Builder({
         project,
         processBuildResult(buildResults) { return Promise.resolve(buildResults); },
-        broccoli2: true,
       });
 
       return builder.build().then(function(result) {
         expect(Object.keys(result)).to.eql(['directory', 'graph']);
-        expect(result.graph.__heimdall__).to.not.be.undefined;
+        if (experiments.BROCCOLI_2) {
+          expect(result.graph.__heimdall__).to.not.be.undefined;
+        } else {
+          expect(result.graph.constructor.name).to.equal('Node');
+        }
         expect(fs.existsSync(result.directory)).to.be.true;
       });
     });
