@@ -46,7 +46,7 @@ describe('build task test', function() {
     return remove(tmproot);
   });
 
-  it('can build', function() {
+  it('can build', function(done) {
     let outputPath = 'dist';
     let task = new BuildTask({
       analytics: new MockAnalytics(),
@@ -60,7 +60,8 @@ describe('build task test', function() {
     };
 
     if (experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
-      chai.expect(task.run(runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+      chai.expect(task.run.bind(task, runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+      done();
     } else {
       return task.run(runOptions).then(() => {
         expect(walkSync(outputPath)).to.eql(['foo.txt']);
@@ -69,7 +70,7 @@ describe('build task test', function() {
     }
   });
 
-  it('generates valid visualization output', function() {
+  it('generates valid visualization output', function(done) {
     process.env.BROCCOLI_VIZ = '1';
 
     let outputPath = 'dist';
@@ -85,7 +86,8 @@ describe('build task test', function() {
     };
 
     if (experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
-      chai.expect(task.run(runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+      chai.expect(task.run.bind(task, runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+      done();
     } else {
       return task.run(runOptions)
         .then(function() {
