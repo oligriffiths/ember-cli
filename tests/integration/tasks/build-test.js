@@ -63,9 +63,10 @@ describe('build task test', function() {
       chai.expect(task.run.bind(task, runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
       done();
     } else {
-      return task.run(runOptions).then(() => {
+      task.run(runOptions).then(() => {
         expect(walkSync(outputPath)).to.eql(['foo.txt']);
         expect(file('dist/foo.txt')).to.equal('Some file named foo.txt\n');
+        done();
       });
     }
   });
@@ -89,7 +90,7 @@ describe('build task test', function() {
       chai.expect(task.run.bind(task, runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
       done();
     } else {
-      return task.run(runOptions)
+      task.run(runOptions)
         .then(function() {
           let vizOutputPath = 'instrumentation.build.0.json';
           expect(file(vizOutputPath)).to.exist;
@@ -104,6 +105,7 @@ describe('build task test', function() {
           expect(output.summary.buildSteps).to.equal(1);
 
           expect(Array.isArray(output.nodes)).to.equal(true);
+          done();
         });
     }
   });
