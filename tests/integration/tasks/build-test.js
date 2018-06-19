@@ -89,7 +89,7 @@ describe('build task test', function() {
       chai.expect(task.run.bind(task, runOptions)).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
       return RSVP.Promise.resolve();
     } else {
-      task.run(runOptions)
+      return task.run(runOptions)
         .then(function() {
           let vizOutputPath = 'instrumentation.build.0.json';
           expect(file(vizOutputPath)).to.exist;
@@ -104,7 +104,6 @@ describe('build task test', function() {
           expect(output.summary.buildSteps).to.equal(1);
 
           expect(Array.isArray(output.nodes)).to.equal(true);
-          done();
         });
     }
   });
