@@ -61,43 +61,47 @@ if (!experiments.MODULE_UNIFICATION) {
       expect(packageContents['ember-addon']).to.deep.equal({ 'configPath': 'tests/dummy/config' });
     });
 
-    it('ember addon foo, clean from scratch', function() {
-      return ember(['test']);
-    });
+    if (!experiments.SYSTEM_TEMP) {
+      it('ember addon foo, clean from scratch', function() {
+        return ember(['test']);
+      });
+    }
 
-    it('works in most common scenarios for an example addon', co.wrap(function *() {
-      yield copyFixtureFiles('addon/kitchen-sink');
+    if (!experiments.SYSTEM_TEMP) {
+      it('works in most common scenarios for an example addon', co.wrap(function *() {
+        yield copyFixtureFiles('addon/kitchen-sink');
 
-      let packageJsonPath = path.join(addonRoot, 'package.json');
-      let packageJson = fs.readJsonSync(packageJsonPath);
+        let packageJsonPath = path.join(addonRoot, 'package.json');
+        let packageJson = fs.readJsonSync(packageJsonPath);
 
-      packageJson.dependencies = packageJson.dependencies || {};
-      // add HTMLBars for templates (generators do this automatically when components/templates are added)
-      packageJson.dependencies['ember-cli-htmlbars'] = 'latest';
+        packageJson.dependencies = packageJson.dependencies || {};
+        // add HTMLBars for templates (generators do this automatically when components/templates are added)
+        packageJson.dependencies['ember-cli-htmlbars'] = 'latest';
 
-      fs.writeJsonSync(packageJsonPath, packageJson);
+        fs.writeJsonSync(packageJsonPath, packageJson);
 
-      let result = yield runCommand('node_modules/ember-cli/bin/ember', 'build');
+        let result = yield runCommand('node_modules/ember-cli/bin/ember', 'build');
 
-      expect(result.code).to.eql(0);
-      let contents;
+        expect(result.code).to.eql(0);
+        let contents;
 
-      let indexPath = path.join(addonRoot, 'dist', 'index.html');
-      contents = fs.readFileSync(indexPath, { encoding: 'utf8' });
-      expect(contents).to.contain('"SOME AWESOME STUFF"');
+        let indexPath = path.join(addonRoot, 'dist', 'index.html');
+        contents = fs.readFileSync(indexPath, { encoding: 'utf8' });
+        expect(contents).to.contain('"SOME AWESOME STUFF"');
 
-      let cssPath = path.join(addonRoot, 'dist', 'assets', 'vendor.css');
-      contents = fs.readFileSync(cssPath, { encoding: 'utf8' });
-      expect(contents).to.contain('addon/styles/app.css is present');
+        let cssPath = path.join(addonRoot, 'dist', 'assets', 'vendor.css');
+        contents = fs.readFileSync(cssPath, { encoding: 'utf8' });
+        expect(contents).to.contain('addon/styles/app.css is present');
 
-      let robotsPath = path.join(addonRoot, 'dist', 'robots.txt');
-      contents = fs.readFileSync(robotsPath, { encoding: 'utf8' });
-      expect(contents).to.contain('tests/dummy/public/robots.txt is present');
+        let robotsPath = path.join(addonRoot, 'dist', 'robots.txt');
+        contents = fs.readFileSync(robotsPath, { encoding: 'utf8' });
+        expect(contents).to.contain('tests/dummy/public/robots.txt is present');
 
-      result = yield runCommand('node_modules/ember-cli/bin/ember', 'test');
+        result = yield runCommand('node_modules/ember-cli/bin/ember', 'test');
 
-      expect(result.code).to.eql(0);
-    }));
+        expect(result.code).to.eql(0);
+      }));
+    }
 
     it('npm pack does not include unnecessary files', co.wrap(function *() {
       let handleError = function(error, commandName) {

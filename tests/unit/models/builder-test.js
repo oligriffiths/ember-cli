@@ -5,8 +5,11 @@ const path = require('path');
 const BuildCommand = require('../../../lib/commands/build');
 const commandOptions = require('../../factories/command-options');
 const RSVP = require('rsvp');
+const rimraf = require('rimraf');
+const fixturify = require('fixturify');
 const MockProject = require('../../helpers/mock-project');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
+const experiments = require('../../../lib/experiments/index');
 const td = require('testdouble');
 const chai = require('../../chai');
 let expect = chai.expect;
@@ -24,15 +27,33 @@ describe('models/builder.js', function() {
   let addon, builder, buildResults, tmpdir;
 
   function setupBroccoliBuilder() {
-    this.builder = {
-      build() {
-        return Promise.resolve('build results');
-      },
-
-      cleanup() {
-        return Promise.resolve('cleanup result');
-      },
-    };
+    if (this.broccoli2) {
+      this.builder = {
+        outputPath: 'build results',
+        outputNodeWrapper: {
+          __heimdall__: {},
+        },
+        build() {
+          return Promise.resolve();
+        },
+        cleanup() {
+        },
+      };
+    } else {
+      this.builder = {
+        build() {
+          return Promise.resolve({
+            directory: 'build results',
+            graph: {
+              __heimdall__: {},
+            },
+          });
+        },
+        cleanup() {
+          return Promise.resolve('cleanup result');
+        },
+      };
+    }
   }
 
   before(function() {
@@ -123,8 +144,10 @@ describe('models/builder.js', function() {
   describe('build', function() {
     let instrumentationStart;
     let instrumentationStop;
+    let cwd;
 
     beforeEach(function() {
+      cwd = process.cwd();
       builder = new Builder({
         setupBroccoliBuilder,
         project: new MockProject(),
@@ -136,9 +159,13 @@ describe('models/builder.js', function() {
     });
 
     afterEach(function() {
+      process.chdir(cwd);
       delete process._heimdall;
       delete process.env.BROCCOLI_VIZ;
       builder.project.ui.output = '';
+      if (fs.existsSync(`${builder.project.root}/tmp`)) {
+        rimraf.sync(`${builder.project.root}/tmp`);
+      }
     });
 
     it('calls instrumentation.start', function() {
@@ -152,7 +179,7 @@ describe('models/builder.js', function() {
       let mockAnnotation = 'MockAnnotation';
 
       return builder.build(null, mockAnnotation).then(function() {
-        td.verify(instrumentationStop('build', 'build results', mockAnnotation), { times: 1 });
+        td.verify(instrumentationStop('build', { directory: 'build results', graph: { __heimdall__: {} } }, mockAnnotation), { times: 1 });
       });
     });
 
@@ -175,6 +202,80 @@ describe('models/builder.js', function() {
         expect(output).to.not.include('Heimdalljs < 0.1.4 found.  Please remove old versions');
       });
     });
+
+    if (!experiments.SYSTEM_TEMP) {
+      it('writes temp files to project root by default', function() {
+        const project = new MockProject();
+        project.root += '/tests/fixtures/build/simple';
+
+        builder = new Builder({
+          project,
+          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        });
+
+        return builder.build().then(function() {
+          expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.true;
+        });
+      });
+    }
+
+    if (experiments.SYSTEM_TEMP && experiments.BROCCOLI_2) {
+      it('writes temp files to Broccoli temp dir when EMBER_CLI_SYSTEM_TEMP=1', function() {
+        const project = new MockProject();
+        project.root += '/tests/fixtures/build/simple';
+        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+        builder = new Builder({
+          project,
+          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        });
+
+        expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+        return builder.build().then(function(result) {
+          expect(fs.existsSync(result.directory)).to.be.true;
+          expect(fs.existsSync(`${builder.project.root}/tmp`)).to.be.false;
+          rimraf.sync(result.directory);
+        });
+      });
+    }
+
+    it('produces the correct output', function() {
+      const project = new MockProject();
+      project.root += '/tests/fixtures/build/simple';
+      const setup = () => new Builder({
+        project,
+        processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+      });
+
+      if (experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
+        chai.expect(setup).to.throw('EMBER_CLI_SYSTEM_TEMP only works in combination with EMBER_CLI_BROCCOLI_2');
+      } else {
+        return setup().build().then(result => {
+          expect(fixturify.readSync(result.directory)).to.deep.equal(fixturify.readSync(`${project.root}/dist`));
+        });
+      }
+    });
+
+    if (!experiments.SYSTEM_TEMP && !experiments.BROCCOLI_2) {
+      it('returns {directory, graph} as the result object', function() {
+        const project = new MockProject();
+        project.root += '/tests/fixtures/build/simple';
+
+        builder = new Builder({
+          project,
+          processBuildResult(buildResults) { return Promise.resolve(buildResults); },
+        });
+
+        return builder.build().then(function(result) {
+          expect(Object.keys(result)).to.eql(['directory', 'graph']);
+          if (experiments.BROCCOLI_2) {
+            expect(result.graph.__heimdall__).to.not.be.undefined;
+          } else {
+            expect(result.graph.constructor.name).to.equal('Node');
+          }
+          expect(fs.existsSync(result.directory)).to.be.true;
+        });
+      });
+    }
   });
 
   describe('cleanup', function() {
@@ -227,23 +328,24 @@ describe('models/builder.js', function() {
       project.addons = [addon];
 
       builder = new Builder({
-        setupBroccoliBuilder() {},
-        builder: {
-          build() {
+        setupBroccoliBuilder() {
+          setupBroccoliBuilder.call(this);
+          let originalBuild = this.builder.build;
+          this.builder.build = () => {
             hooksCalled.push('build');
-
-            return Promise.resolve(buildResults);
-          },
-
-          cleanup() {
-            return Promise.resolve('cleanup results');
-          },
+            return originalBuild.call(this);
+          };
         },
         processBuildResult(buildResults) { return Promise.resolve(buildResults); },
         project,
       });
 
-      buildResults = 'build results';
+      buildResults = {
+        directory: 'build results',
+        graph: {
+          __heimdall__: {},
+        },
+      };
     });
 
     afterEach(function() {
