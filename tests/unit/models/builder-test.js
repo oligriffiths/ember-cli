@@ -7,6 +7,8 @@ const commandOptions = require('../../factories/command-options');
 const RSVP = require('rsvp');
 const rimraf = require('rimraf');
 const fixturify = require('fixturify');
+const sinon = require('sinon');
+const chalk = require('chalk');
 const MockProject = require('../../helpers/mock-project');
 const mkTmpDirIn = require('../../../lib/utilities/mk-tmp-dir-in');
 const { isExperimentEnabled } = require('../../../lib/experiments');
@@ -28,6 +30,7 @@ describe('models/builder.js', function() {
 
   function setupBroccoliBuilder() {
     if (isExperimentEnabled('BROCCOLI_2')) {
+      this.broccoliBuilderFallback = false;
       this.builder = {
         outputPath: 'build results',
         outputNodeWrapper: {
@@ -45,6 +48,7 @@ describe('models/builder.js', function() {
         },
       };
     } else {
+      this.broccoliBuilderFallback = true;
       this.builder = {
         build() {
           return Promise.resolve({
@@ -498,4 +502,42 @@ describe('models/builder.js', function() {
       });
     });
   });
+
+  if (isExperimentEnabled('BROCCOLI_2')) {
+    describe('fallback from broccoli 2 to broccoli-builder', function() {
+      it('falls back to broccoli-builder if an InvalidNode error is thrown for read/rebuild api', function() {
+        let spy = sinon.spy(console, 'warn');
+
+        const builder = new Builder({
+          project: new MockProject(),
+          readBuildFile() {
+            return {
+              read() {
+
+              },
+              rebuild() {
+
+              },
+            };
+          },
+        });
+
+        expect(builder.broccoliBuilderFallback).to.be.true;
+        sinon.assert.calledWith(spy, chalk.red('ERROR: Invalid Broccoli2 node detected, falling back to broccoli-builder. Broccoli error:'));
+        sinon.assert.calledWith(spy, chalk.yellow('---------------'));
+        sinon.assert.calledWith(spy, chalk.yellow("Object: The .read/.rebuild API is no longer supported as of Broccoli 1.0. Plugins must now derive from broccoli-plugin. https://github.com/broccolijs/broccoli/blob/master/docs/broccoli-1-0-plugin-api.md\nused as output node"));
+        sinon.assert.calledWith(spy, chalk.yellow('---------------'));
+        spy.restore();
+      });
+
+      it('errors for an invalid node', function() {
+        expect(() => new Builder({
+          project: new MockProject(),
+          readBuildFile() {
+            return {};
+          },
+        })).to.throw('[object Object] is not a Broccoli node\nused as output node');
+      });
+    });
+  }
 });
